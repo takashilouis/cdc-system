@@ -1,0 +1,28 @@
+#cloud-config
+runcmd:
+  # Docker
+  - curl -fsSL https://get.docker.com/ | sh
+  - sudo usermod -aG docker ubuntu
+  - cd /home/ubuntu
+  - git clone https://github.com/hero2510/200lab-ec2-cdc.git && cd 200lab-ec2-cdc
+  - docker compose -f docker-compose-server.yaml down
+  - docker network create crawler
+  - docker compose -f docker-compose-server.yaml up -d
+  - curl -sOL https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
+  - chmod +x wait-for-it.sh
+  - ./wait-for-it.sh -t 0 localhost:5432 -- echo "postgres up"
+  - ./wait-for-it.sh -t 0 localhost:8083 -- echo "kafka connect up"
+  - sleep 60
+  - docker run --env-file=./migrate/.env.container --net crawler hero2510/migrate-app /app/run init
+  - docker run --env-file=./migrate/.env.container --net crawler hero2510/migrate-app /app/run migrate
+  - curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @configs/connector/postgres-source.json
+  - curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @configs/connector/elasticsearch-sink.json  
+  - |
+    PUBLIC_IP=$(curl -s http://checkip.amazonaws.com)
+    sed -i 's|localhost|'$${PUBLIC_IP}'|g' ./website/.env
+    # docker build ./website -t hero2510/crawler-website
+    # docker run --net crawler -p 3100:80 hero2510/crawler-website
+
+packages:
+  - git
+  - curl

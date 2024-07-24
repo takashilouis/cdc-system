@@ -1,0 +1,5 @@
+/kafka
+/postgres
+/elasticsearch
+/terraform/.terraform*
+/terraform/*.tfstate*
